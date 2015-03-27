@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>SB Admin 2 - Bootstrap Admin Theme</title>
+
+    <!-- Bootstrap Core CSS -->
+    <link href="../bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- MetisMenu CSS -->
+    <link href="../bower_components/metisMenu/dist/metisMenu.min.css" rel="stylesheet">
+
+    <!-- DataTables CSS -->
+    <link href="../bower_components/datatables-plugins/integration/bootstrap/3/dataTables.bootstrap.css" rel="stylesheet">
+
+    <!-- DataTables Responsive CSS -->
+    <link href="../bower_components/datatables-responsive/css/dataTables.responsive.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="../dist/css/sb-admin-2.css" rel="stylesheet">
+
+    <!-- Custom Fonts -->
+    <link href="../bower_components/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+    <script src="../bower_components/jquery/dist/jquery.min.js"></script>
+    <script type="text/javascript">
+        function isExist(val, arr) {
+            for (var i = 0; i < arr.length; i++) {
+                if (val == arr[i]) 
+                    return true;
+            }
+            return false;
+        }
+
+        function searchPodsInSlave(e) {
+            var minionIP = e.innerHTML;  //192.168.1.151
+            var panelID = minionIP.replace(/\./g, "-"); //192-168-1-151
+            var item = null;
+            var podsHTML = "";
+
+            var id, status, resourceVersion, creationTimestamp, podIP, labelsApp, labelsName, labelsUses, namespace, generateName, containerName, containerImage = "";
+
+            for ( var i = 0; i < allPods.items.length; i++ ) {
+                item = allPods.items[i];
+                if (item.currentState.hostIP == minionIP) {
+                    id = item.id;
+                    status = item.currentState.status;
+                    resourceVersion = item.resourceVersion;
+                    creationTimestamp = item.creationTimestamp;
+                    podIP = item.currentState.podIP;
+                    labelsApp = item.labels.app;
+                    labelsName = item.labels.name;
+                    labelsUses = item.labels.uses;
+                    namespace = item.namespace;
+                    generateName = item.generateName;
+                    podsHTML += "<div class=\"table-responsive\"><table class=\"table table-bordered table-striped\"><tbody><tr><th>id</th><td>" + id + "</td><th colspan=\"2\">status</th><td class=\"text-success\">" + status + "</td></tr><tr><th>resourceVersion</th><td>" + resourceVersion + "</td><th colspan=\"2\">creationTimestamp</th><td>" + creationTimestamp + "</td></tr><tr><th>podIP</th><td>" + podIP + "</td><th rowspan=\"3\">labels</th><th>app</th><td colspan=\"2\">" + labelsApp + "</td></tr><tr><th>namespace</th><td>" + namespace + "</td><th>name</th><td colspan=\"2\">" + labelsName + "</td></tr><tr><th>generateName</th><td>" + generateName + "</td><th>uses</th><td colspan=\"2\">" + labelsUses + "</td></tr>";
+
+                    // add containers info
+                    for ( var j = 0; j < item.desiredState.manifest.containers.length; j++ ) {
+                        var rowspan = item.desiredState.manifest.containers.length * 2;
+                        containerName = item.desiredState.manifest.containers[j].name;
+                        containerImage = item.desiredState.manifest.containers[j].image;
+                        if (j == 0) {
+                            podsHTML += "<tr><th rowspan=\"" + rowspan + "\">containers</th><th rowspan=\"2\">" + (j + 1) + "</th><th>name</th><td colspan=\"3\">" + containerName + "</td></tr><tr><th>image</th><td colspan=\"3\">" + containerImage + "</td></tr>";
+                        } else if ( j > 0) {
+                            podsHTML += "<tr><th rowspan=\"2\">" + (j + 1) + "</th><th>name</th><td colspan=\"3\">" + containerName + "</td></tr><tr><th>image</th><td colspan=\"3\">" + containerImage + "</td></tr>";
+                        }
+                    }
+                    podsHTML += "</tbody></table></div>";
+                }
+            }
+            $("#" + panelID).html(podsHTML);
+        }
+            // alert(allPods.items[0].currentState.hostIP);
+            // alert(e.innerHTML);
+             // var podsHTML = "<div class=\"table-responsive\"><table class=\"table table-bordered table-striped\"><tbody><tr><th>id</th><td>frontend-controller-0133o</td><th rowspan=\"2\">containers</th><th>name</th><td colspan=\"2\">php-redis</td></tr><tr><th>status</th><td class=\"text-success\">Running</td><th>containerPort</th><td colspan=\"2\">80</td></tr><tr><th>podIP</th><td>10.0.28.3</td><th rowspan=\"3\">labels</th><th>app</th><td colspan=\"2\">frontend</td></tr><tr><th>namespace</th><td>default</td><th>name</th><td colspan=\"2\">frontend</td></tr><tr><th>generateName</th><td>frontend-controller-</td><th>uses</th><td colspan=\"2\">redis-slave-or-redis-master</td></tr></tbody></table></div>";
+             // var podsHTML = "<div class=\"table-responsive\"><table class=\"table table-bordered table-striped\"><tbody><tr><th>id</th><td>frontend-controller-0133o</td><th colspan=\"2\">status</th><td class=\"text-success\">Running</td></tr><tr><th>resourceVersion</th><td>159481</td><th colspan=\"2\">creationTimestamp</th><td>2015-03-23T10:44:34+08:00</td></tr><tr><th>podIP</th><td>10.0.28.3</td><th rowspan=\"3\">labels</th><th>app</th><td colspan=\"2\">frontend</td></tr><tr><th>namespace</th><td>default</td><th>name</th><td colspan=\"2\">frontend</td></tr><tr><th>generateName</th><td>frontend-controller-</td><th>uses</th><td colspan=\"2\">redis-slave-or-redis-master</td></tr><tr><th rowspan=\"6\">containers</th><th rowspan=\"2\">1</th><th>labels</th><td colspan=\"3\">10.0.28.3</td></tr><tr><th>labels</th><td colspan=\"3\">10.0.28.3</td></tr><tr><th rowspan=\"2\">2</th><th>labels</th><td colspan=\"3\">10.0.28.3</td></tr><tr><th>labels</th><td colspan=\"3\">10.0.28.3</td></tr><tr><th rowspan=\"2\">3</th><th>labels</th><td colspan=\"3\">10.0.28.3</td></tr><tr><th>labels</th><td colspan=\"3\">10.0.28.3</td></tr></tbody></table></div>";
+      
+
+        
+        jQuery(document).ready(function($) {
+            var slaveIPArr = new Array();
+            $.ajax({
+                dataType: "json",
+                url: "http://202.120.40.177:18081/kubernetes/api/v1beta1/pods",
+                contentType: "application/json",
+                type: "GET",
+                xhrFields: {
+                    withCredentials: true
+                },
+                success: function (result) {
+                    allPods = result;
+                    slaveIPArr.push(result.items[0].currentState.hostIP);
+                    for (var i = 1; i < result.items.length; i++) {
+                        if (!isExist(result.items[i].currentState.hostIP, slaveIPArr))
+                            slaveIPArr.push(result.items[i].currentState.hostIP);
+                    }
+                    slaveIPArr.sort(); //对数组进行排序
+
+                    var slavePanels = "";
+                    for (var i = 0; i < slaveIPArr.length; i++) {
+                        var panelID = slaveIPArr[i];
+                        var panelCount = i;
+                        var tagID = panelID.replace(/\./g, "-");
+                        console.log(tagID);
+                        // slavePanels += "<div class=\"panel panel-default\"><div class=\"panel-heading\"><h4 class=\"panel-title\"><a onclick=\"searchPodsInSlave(" + slaveIPArr[i] + ", " + result + ", " + slaveIPArr[i] + ")\" data-toggle=\"collapse\" data-parent=\"#accordion\" href=\"#" + panelCount + "\">" + panelID + "</a></h4></div><div id=\"" + panelCount+ "\" class=\"panel-collapse collapse\"><div class=\"panel-body\" id=\"" + slaveIPArr[i] + "\"></div></div></div>";
+                        slavePanels += "<div class=\"panel panel-default\"><div class=\"panel-heading\"><h4 class=\"panel-title\"><a onclick=\"searchPodsInSlave(this)\" data-toggle=\"collapse\" data-parent=\"#accordion\" href=\"#" + panelCount + "\">" + panelID + "</a></h4></div><div id=\"" + panelCount + "\" class=\"panel-collapse collapse\"><div class=\"panel-body\" id=\"" + tagID + "\"></div></div></div>";
+                    }
+                    $("#accordion").html(slavePanels);
+                }
+            });
+        });
+
+    // $("#aaa").onclick = function() {
+    //     alert("hello");
+    // }
+    </script>
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+</head>
+
+<body>
+
+    <div id="wrapper">
+
+        <!-- Navigation -->
+        <nav class="navbar navbar-default navbar-static-top" role="navigation" style="margin-bottom: 0">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="index.html">Kubernetes Lab</a>
+            </div>
+            <!-- /.navbar-header -->
+
+            <ul class="nav navbar-top-links navbar-right">
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-envelope fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-messages">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>Read All Messages</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-messages -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-tasks fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-tasks">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 1</strong>
+                                        <span class="pull-right text-muted">40% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" style="width: 40%">
+                                            <span class="sr-only">40% Complete (success)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 2</strong>
+                                        <span class="pull-right text-muted">20% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-info" role="progressbar" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100" style="width: 20%">
+                                            <span class="sr-only">20% Complete</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 3</strong>
+                                        <span class="pull-right text-muted">60% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 60%">
+                                            <span class="sr-only">60% Complete (warning)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 4</strong>
+                                        <span class="pull-right text-muted">80% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-danger" role="progressbar" aria-valuenow="80" aria-valuemin="0" aria-valuemax="100" style="width: 80%">
+                                            <span class="sr-only">80% Complete (danger)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>See All Tasks</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-tasks -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-bell fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-alerts">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-comment fa-fw"></i> New Comment
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-twitter fa-fw"></i> 3 New Followers
+                                    <span class="pull-right text-muted small">12 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-envelope fa-fw"></i> Message Sent
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-tasks fa-fw"></i> New Task
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-upload fa-fw"></i> Server Rebooted
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>See All Alerts</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-alerts -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-user fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-user">
+                        <li><a href="#"><i class="fa fa-user fa-fw"></i> User Profile</a>
+                        </li>
+                        <li><a href="#"><i class="fa fa-gear fa-fw"></i> Settings</a>
+                        </li>
+                        <li class="divider"></li>
+                        <li><a href="login.html"><i class="fa fa-sign-out fa-fw"></i> Logout</a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-user -->
+                </li>
+                <!-- /.dropdown -->
+            </ul>
+            <!-- /.navbar-top-links -->
+
+            <div class="navbar-default sidebar" role="navigation">
+                <div class="sidebar-nav navbar-collapse">
+                    <ul class="nav" id="side-menu">
+                        <li class="sidebar-search">
+                            <div class="input-group custom-search-form">
+                                <input type="text" class="form-control" placeholder="Search...">
+                                <span class="input-group-btn">
+                                <button class="btn btn-default" type="button">
+                                    <i class="fa fa-search"></i>
+                                </button>
+                            </span>
+                            </div>
+                            <!-- /input-group -->
+                        </li>
+                        <li>
+                            <a href="index.html"><i class="fa fa-dashboard fa-fw"></i> Dashboard</a>
+                        </li>
+                        
+                        <!--author: scuxiayiqian-->
+                        <li>
+                            <a href="blank.html"><i class="fa fa-edit fa-fw"></i> VM Manager</a>
+                        </li>
+                        <li>
+                            <a href="tables.html"><i class="fa fa-wrench fa-fw"></i> Pod Manager</a>
+                        </li>
+                        <li>
+                            <a href="forms.html"><i class="fa fa-sitemap fa-fw"></i> User Manager</a>
+                        </li>
+                        <!--author: scuxiayiqian-->
+                    </ul>
+                </div>
+                <!-- /.sidebar-collapse -->
+            </div>
+            <!-- /.navbar-static-side -->
+        </nav>
+
+        <div id="page-wrapper">
+            <div class="row">
+                <div class="col-lg-12">
+                    <h1 class="page-header">Pod Manager</h1>
+                </div>
+                <!-- /.col-lg-12 -->
+            </div>
+
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            Master Host: 202.120.40.177 <br>
+                            Server IP: 192.168.1.150
+                        </div>
+                        <!-- .panel-heading -->
+                        <div class="panel-body">
+                            <div class="panel-group" id="accordion">
+                                <!-- ## -->
+                                <!-- <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="panel-title">
+                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseOne" id="slave1"></a>
+                                        </h4>
+                                    </div>
+                                    <div id="collapseOne" class="panel-collapse collapse">
+                                        <div class="panel-body">
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered table-striped">
+                                                    <tbody>
+                                                        <tr>
+                                                            <th>id</th>
+                                                            <td>frontend-controller-0133o</td>
+                                                            <th colspan="2">status</th>
+                                                            <td class="text-success">Running</td> 
+                                                        </tr>
+                                                        <tr>
+                                                            <th>resourceVersion</th>
+                                                            <td>159481</td>
+                                                            <th colspan="2">creationTimestamp</th>
+                                                            <td>2015-03-23T10:44:34+08:00</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>podIP</th>
+                                                            <td>10.0.28.3</td>
+                                                            <th rowspan="3">labels</th>
+                                                            <th>app</th>
+                                                            <td colspan="2">frontend</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>namespace</th>
+                                                            <td>default</td>
+                                                            <th>name</th>
+                                                            <td colspan="2">frontend</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>generateName</th>
+                                                            <td>frontend-controller-</td>
+                                                            <th>uses</th>
+                                                            <td colspan="2">redis-slave-or-redis-master</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th rowspan="6">containers</th>
+                                                            <th rowspan="2">1</th>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th rowspan="2">2</th>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th rowspan="2">3</th>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="panel-title">
+                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseTwo">slave2</a>
+                                        </h4>
+                                    </div>
+                                    <div id="collapseTwo" class="panel-collapse collapse">
+                                        <div class="panel-body" id="slave2">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="panel-title">
+                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseThree">slave3</a>
+                                        </h4>
+                                    </div>
+                                    <div id="collapseThree" class="panel-collapse collapse">
+                                        <div class="panel-body" id="slave3">
+                                        </div>
+                                    </div>
+                                </div> -->
+                            </div>
+                        </div>
+                        <!-- .panel-body -->
+                    </div>
+                    <!-- /.panel -->
+                </div>
+                <!-- /.col-lg-12 -->
+            </div>
+
+            
+        </div>
+        <!-- /#page-wrapper -->
+
+    </div>
+    <!-- /#wrapper -->
+
+    <!-- jQuery -->
+    <script src="../bower_components/jquery/dist/jquery.min.js"></script>
+
+    <!-- Bootstrap Core JavaScript -->
+    <script src="../bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+
+    <!-- Metis Menu Plugin JavaScript -->
+    <script src="../bower_components/metisMenu/dist/metisMenu.min.js"></script>
+
+    <!-- DataTables JavaScript -->
+    <script src="../bower_components/datatables/media/js/jquery.dataTables.min.js"></script>
+    <script src="../bower_components/datatables-plugins/integration/bootstrap/3/dataTables.bootstrap.min.js"></script>
+
+    <!-- Custom Theme JavaScript -->
+    <script src="../dist/js/sb-admin-2.js"></script>
+
+    <!-- Page-Level Demo Scripts - Tables - Use for reference -->
+    <script>
+    $(document).ready(function() {
+        $('#dataTables-example').DataTable({
+                responsive: true
+        });
+    });
+    </script>
+
+</body>
+
+</html>
