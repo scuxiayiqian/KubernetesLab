@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>Kubernetes Lab - User Manager</title>
+
+    <!-- 自定义cookie函数 -->
+    <script src="../dist/js/cookie.js"></script>
+
+    <!-- jQuery -->
+    <script src="../bower_components/jquery/dist/jquery.min.js"></script>
+    <script src="../bower_components/jquery/dist/jquery.cookie.js"></script>
+
+    <!-- Bootstrap Core CSS -->
+    <link href="../bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- MetisMenu CSS -->
+    <link href="../bower_components/metisMenu/dist/metisMenu.min.css" rel="stylesheet">
+
+    <!-- DataTables CSS -->
+    <link href="../bower_components/datatables-plugins/integration/bootstrap/3/dataTables.bootstrap.css" rel="stylesheet">
+
+    <!-- DataTables Responsive CSS -->
+    <link href="../bower_components/datatables-responsive/css/dataTables.responsive.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="../dist/css/sb-admin-2.css" rel="stylesheet">
+
+    <!-- Custom Fonts -->
+    <link href="../bower_components/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+    <script type="text/javascript">
+    //Get the login user
+    $(document).ready(function() {
+        var id = $.cookie("id");
+        if (id == null) {
+            window.location.href = "login-first.html";
+        }
+        if (id == "Admin") {
+            showUserPage.style.display = "";
+        }
+        var label = document.getElementById('usernameLabel');
+        label.innerHTML = "<a href=\"index.html\">" + id + "</a>";
+    });
+
+    // //设置cookie
+    // function setCookie(cname, cvalue, exdays) {
+    //     var d = new Date();
+    //     d.setTime(d.getTime() + (exdays*24*60*60*1000));
+    //     var expires = "expires="+d.toUTCString();
+    //     document.cookie = cname + "=" + cvalue + "; " + expires;
+    // }
+
+    // //清除cookie  
+    // function clearCookie(name) {  
+    //     setCookie(name, "", -1);  
+    // }
+
+    function updateClicked(e) {
+        document.getElementById('userName').value = e;
+        $('#updateUser').modal('show');
+    }
+
+    function updateUser() {
+        var psw = document.getElementById('newPsw').value;
+        var pswEnsure = document.getElementById('newPswEnsure').value;
+        var name;
+        if (psw != pswEnsure) {
+            alert("Password not match!");
+        }            
+        else {
+            name = document.getElementById('userName').value;
+            var userInfo = "{\"name\": \"" + name + "\",\"password\": \"" + psw + "\"}";
+            $.ajax({
+                url: "http://localhost:80/yiqian/users/" + name,
+                dataType: "json",
+                data: userInfo,                
+                contentType: "application/json",
+                type: "PUT",
+                success: function (result) {
+                    console.log("update user done!"); 
+                    $("#updateUser").modal('hide');
+                },
+                //调用出错执行的函数
+                error: function(){
+                    alert("update failed");
+                }   
+            });
+        }
+    }
+
+    function deleteClicked(e) {
+        // document.getElementById('podName').value = e;
+        document.getElementById('warningwords').innerHTML = "<p>Are you sure to delete " + e + "?</p>" ;
+        $('#deleteUser').modal('show');
+        document.getElementById('userTobeDeleted').innerHTML = e;
+    }
+
+    function deleteUser() {
+        var name = document.getElementById('userTobeDeleted').innerHTML;
+
+        $.ajax({
+            url: "http://localhost:80/yiqian/users/" + name,
+            dataType: "json",
+            contentType: "application/json",
+            type: "DELETE",
+            success: function (result) {
+                console.log("delete user done!"); 
+                $("#deleteUser").modal('hide');
+                window.location.reload();
+            },
+            //调用出错执行的函数
+            error: function(){
+                alert("delete failed");
+            }   
+        });
+    }
+
+    var userClicked = "";
+    function podsClicked(usrName) {
+        
+        userClicked = usrName;
+
+        var slaveIPArr = new Array();
+            $.ajax({
+                dataType: "json",
+                url: "http://localhost:80/k8s/api/v1beta1/pods",
+                // url: "http://202.120.40.177:18081/kubernetes/api/v1beta1/pods",
+                contentType: "application/json",
+                type: "GET",
+                xhrFields: {
+                    withCredentials: true
+                },
+                success: function (result) {
+                    allPods = result;
+                    slaveIPArr.push(result.items[0].currentState.hostIP);
+                    for (var i = 1; i < result.items.length; i++) {
+                        if (!isExist(result.items[i].currentState.hostIP, slaveIPArr))
+                            slaveIPArr.push(result.items[i].currentState.hostIP);
+                    }
+                    slaveIPArr.sort(); //对数组进行排序
+
+                    var slavePanels = "";
+                    for (var i = 0; i < slaveIPArr.length; i++) {
+                        var panelID = slaveIPArr[i];
+                        var panelCount = i;
+                        var tagID = panelID.replace(/\./g, "-");
+                        // console.log(tagID);
+                        slavePanels += "<div class=\"panel panel-default\"><div class=\"panel-heading\"><h4 class=\"panel-title\"><a onclick=\"searchPodsInSlaveReady(this)\" data-toggle=\"collapse\" data-parent=\"#accordion\" href=\"#" + panelCount + "\">" + panelID + "</a></h4></div><div id=\"" + panelCount + "\" class=\"panel-collapse collapse\"><div class=\"panel-body\" id=\"" + tagID + "\"></div></div></div>";
+                    }
+                    $("#accordion").html(slavePanels);
+                }
+            });
+
+        $("#showUserPods").modal('show');
+    }
+
+    function isExist(val, arr) {
+        for (var i = 0; i < arr.length; i++) {
+            if (val == arr[i]) 
+                return true;
+        }
+        return false;
+    }
+
+    function searchPodsInSlaveReady(e) {
+        //先把当前登陆用户的所有pod id记录下来
+        var onlineUserName = userClicked;
+        var onlineUserContainers = new Array();
+        
+        $.ajax({
+            type: "GET",
+            url: "http://localhost:80/yiqian/containers/" + onlineUserName,
+            contentType: "application/json",
+            dataType: "json",  
+            xhrFields: {
+                withCredentials: true
+            },              
+            success: function(result){
+                for (var i = 0; i < result.length; i++) {
+                    onlineUserContainers.push(result[i].id);
+                }
+                onlineUserContainersStr = onlineUserContainers.toString();
+                searchPodsInSlave(e);
+            },
+            error: function(){ }
+        });            
+    }      
+
+    function searchPodsInSlave(e) {
+        var minionIP = e.innerHTML;  //192.168.1.151
+        var panelID = minionIP.replace(/\./g, "-"); //192-168-1-151
+        var item = null;
+        var podsHTML = "";
+        var tmpId = "";
+
+        var id, status, resourceVersion, creationTimestamp, podIP, labelsApp, labelsName, labelsUses, namespace, generateName, containerName, containerImage = "";
+
+        for ( var i = 0; i < allPods.items.length; i++ ) {
+            item = allPods.items[i];
+            tmpId = item.id;
+            // console.log(tmpId);
+
+            if ( (item.currentState.hostIP == minionIP) && ((onlineUserContainersStr.indexOf(tmpId)) != "-1") ) {
+                id = item.id;
+                status = item.currentState.status;
+                resourceVersion = item.resourceVersion;
+                creationTimestamp = item.creationTimestamp;
+                podIP = item.currentState.podIP;
+                labelsApp = item.labels.app;
+                labelsName = item.labels.name;
+                labelsUses = item.labels.uses;
+                namespace = item.namespace;
+                generateName = item.generateName;
+                podsHTML += "<div class=\"table-responsive\"><table class=\"table table-bordered table-striped\"><tbody><tr><th>id</th><td>" + id + "</td><th colspan=\"2\">status</th><td class=\"text-success\">" + status + "</td></tr><tr><th>resourceVersion</th><td>" + resourceVersion + "</td><th colspan=\"2\">creationTimestamp</th><td>" + creationTimestamp + "</td></tr><tr><th>podIP</th><td>" + podIP + "</td><th rowspan=\"3\">labels</th><th>app</th><td colspan=\"2\">" + labelsApp + "</td></tr><tr><th>namespace</th><td>" + namespace + "</td><th>name</th><td colspan=\"2\">" + labelsName + "</td></tr><tr><th>generateName</th><td>" + generateName + "</td><th>uses</th><td colspan=\"2\">" + labelsUses + "</td></tr>";
+
+                // add containers info
+                for ( var j = 0; j < item.desiredState.manifest.containers.length; j++ ) {
+                    var rowspan = item.desiredState.manifest.containers.length * 2;
+                    containerName = item.desiredState.manifest.containers[j].name;
+                    containerImage = item.desiredState.manifest.containers[j].image;
+                    if (j == 0) {
+                        podsHTML += "<tr><th rowspan=\"" + rowspan + "\">containers</th><th rowspan=\"2\">" + (j + 1) + "</th><th>name</th><td colspan=\"3\">" + containerName + "</td></tr><tr><th>image</th><td colspan=\"3\">" + containerImage + "</td></tr>";
+                    } else if ( j > 0) {
+                        podsHTML += "<tr><th rowspan=\"2\">" + (j + 1) + "</th><th>name</th><td colspan=\"3\">" + containerName + "</td></tr><tr><th>image</th><td colspan=\"3\">" + containerImage + "</td></tr>";
+                    }
+                }
+                podsHTML += "</tbody></table></div>";
+            }
+        }
+        $("#" + panelID).html(podsHTML);
+    }
+
+    function createUser() {
+        var newusername = document.getElementById('newUserName').value;
+        var newpsw = document.getElementById('newUserPsw').value;
+        var newpswensure = document.getElementById('newUserPswEnsure').value;
+        var userInfo = "";
+
+        if (newpsw != newpswensure) {
+            alert("Password not match!");
+        }
+        else {
+            userInfo = "{\"name\": \"" + newusername + "\",\"password\": \"" + newpsw + "\"}";
+            $.ajax({
+                type: "POST",
+                url:"http://localhost:80/yiqian/users/",
+                contentType: "application/json",
+                data: userInfo,  
+                dataType: "json", 
+                success: function (result) {
+                    $("#newUser").modal('hide');
+                    window.location.reload();
+                }, 
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    alert("Username existed!");
+                }
+            });
+        }
+    }
+
+    jQuery(document).ready(function($) {  
+        $.ajax({
+            dataType: "json",
+            // url: "http://202.120.40.177:18081/kubernetes/api/v1beta1/minions",
+            url: "http://localhost:80/yiqian/users/",
+            contentType: "application/json",
+            type: "GET",
+            xhrFields: {
+                withCredentials: true
+            },
+            success: function (result) {
+                // console.log(result.length); 
+                var username, userpsw, usersTableStr = "";
+
+                for (var i = 0; i < result.length; i++) {
+                    username = result[i].name;
+                    userpsw = result[i].password;
+                    
+                    usersTableStr += "<tr class=\"odd gradeX\"><td>" + username + "</td><td>" + result[i].containers.length + "</td><td class=\"center\"><a href=\"#\" onclick=\"updateClicked('" + username + "');\">Edit</a> &nbsp; <a href=\"#\" onclick=\"deleteClicked('" + username + "');\">Delete</a> &nbsp; <a href=\"#\" onclick=\"podsClicked('" + username + "');\">Pods</a></td></tr>";
+                }
+                // usersTableStr = "<tr class=\"odd gradeX\"><td>xiayiqian</td><td>3</td><td class=\"center\"><a href=\"#\" onclick=\"updateClicked('aaa');\">Edit</a> &nbsp; <a href=\"\" class=\"delete\">Delete</a> &nbsp; <a href=\"\" class=\"delete\">Pods</a></td></tr><tr class=\"odd gradeX\"><td>tanglihong</td><td>2</td><td class=\"center\"><a href=\"\" class=\"edit\">Edit</a> &nbsp; <a href=\"\" class=\"delete\">Delete</a> &nbsp; <a href=\"\" class=\"delete\">Pods</a></td></tr><tr class=\"odd gradeX\"><td>xiajianlin</td><td>1</td><td class=\"center\"><a href=\"\" class=\"edit\">Edit</a> &nbsp; <a href=\"\" class=\"delete\">Delete</a> &nbsp; <a href=\"\" class=\"delete\">Pods</a></td></tr><tr class=\"odd gradeX\"><td>linyi</td><td>2</td><td class=\"center\"><a href=\"\" class=\"edit\">Edit</a> &nbsp; <a href=\"\" class=\"delete\">Delete</a> &nbsp; <a href=\"\" class=\"delete\">Pods</a></td></tr>";
+
+                $("#usersInfo").html(usersTableStr);
+            }
+        });
+    });
+    
+    </script>
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+</head>
+
+<body>
+    <div id="wrapper">
+        <!-- Navigation -->
+        <nav class="navbar navbar-default navbar-static-top" role="navigation" style="margin-bottom: 0">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="index.html">Kubernetes Lab</a>
+            </div>
+            <!-- /.navbar-header -->
+
+            <ul class="nav navbar-top-links navbar-right">
+                <li id = "usernameLabel"></li>
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-envelope fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-messages">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>Read All Messages</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-messages -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-tasks fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-tasks">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 1</strong>
+                                        <span class="pull-right text-muted">40% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" style="width: 40%">
+                                            <span class="sr-only">40% Complete (success)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 2</strong>
+                                        <span class="pull-right text-muted">20% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-info" role="progressbar" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100" style="width: 20%">
+                                            <span class="sr-only">20% Complete</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 3</strong>
+                                        <span class="pull-right text-muted">60% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 60%">
+                                            <span class="sr-only">60% Complete (warning)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 4</strong>
+                                        <span class="pull-right text-muted">80% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-danger" role="progressbar" aria-valuenow="80" aria-valuemin="0" aria-valuemax="100" style="width: 80%">
+                                            <span class="sr-only">80% Complete (danger)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>See All Tasks</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-tasks -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-bell fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-alerts">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-comment fa-fw"></i> New Comment
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-twitter fa-fw"></i> 3 New Followers
+                                    <span class="pull-right text-muted small">12 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-envelope fa-fw"></i> Message Sent
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-tasks fa-fw"></i> New Task
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-upload fa-fw"></i> Server Rebooted
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>See All Alerts</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-alerts -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-user fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-user">
+                        <li><a href="#"><i class="fa fa-user fa-fw"></i> User Profile</a>
+                        </li>
+                        <li><a href="#"><i class="fa fa-gear fa-fw"></i> Settings</a>
+                        </li>
+                        <li class="divider"></li>
+                        <li><a href="#" onclick=logOut();><i class="fa fa-sign-out fa-fw"></i> Logout</a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-user -->
+                </li>
+                <!-- /.dropdown -->
+            </ul>
+            <!-- /.navbar-top-links -->
+
+            <div class="navbar-default sidebar" role="navigation">
+                <div class="sidebar-nav navbar-collapse">
+                    <ul class="nav" id="side-menu">
+                        <li class="sidebar-search">
+                            <div class="input-group custom-search-form">
+                                <input type="text" class="form-control" placeholder="Search...">
+                                <span class="input-group-btn">
+                                <button class="btn btn-default" type="button">
+                                    <i class="fa fa-search"></i>
+                                </button>
+                            </span>
+                            </div>
+                            <!-- /input-group -->
+                        </li>
+                        <li>
+                            <a href="index.html"><i class="fa fa-dashboard fa-fw"></i> Dashboard</a>
+                        </li>
+                        <!--author: scuxiayiqian-->
+                        <li>
+                            <a href="vm.html"><i class="fa fa-edit fa-fw"></i> VM Manager</a>
+                        </li>
+                        <li>
+                            <a href="pod.html"><i class="fa fa-wrench fa-fw"></i> Pod Manager</a>
+                        </li>
+                        <li style="display:none" id="showUserPage">
+                            <a href="user.html"><i class="fa fa-sitemap fa-fw"></i> User Manager</a>
+                        </li>
+                        <!--author: scuxiayiqian-->
+                    </ul>
+                </div>
+                <!-- /.sidebar-collapse -->
+            </div>
+            <!-- /.navbar-static-side -->
+        </nav>
+
+        <div id="page-wrapper">
+            <div class="row">
+                <div class="col-lg-12">
+                    <h1 class="page-header">User Manager</h1>
+                </div>
+                <!-- /.col-lg-12 -->
+            </div>
+            <!-- /.row -->
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            All Users
+                            <button type="button" class="padding-right15 pull-right btn btn-success" data-toggle="modal" data-target="#newUser">New User</button>
+                        </div>
+                        <!-- /.panel-heading -->
+                        <div class="panel-body">
+                            <div class="dataTable_wrapper">
+                                <table class="table table-striped table-bordered table-hover" id="dataTables-example">
+                                    <thead>
+                                        <tr>
+                                            <th>User Name</th>
+                                            <th>Pod Number</th>
+                                            <th>Options</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersInfo">
+                                        <!-- <tr class="odd gradeX">
+                                            <td>xiayiqian</td>
+                                            <td>3</td>
+                                            <td class="center"><a href="#" onclick="updateUser('aaa');">Edit</a> &nbsp; <a href="" class="delete">Delete</a> &nbsp; <a href="" class="delete">Pods</a></td>
+                                        </tr>
+                                        <tr class="odd gradeX">
+                                            <td>tanglihong</td>
+                                            <td>2</td>
+                                            <td class="center"><a href="" class="edit">Edit</a> &nbsp; <a href="" class="delete">Delete</a> &nbsp; <a href="" class="delete">Pods</a></td>
+                                        </tr>
+                                        <tr class="odd gradeX">
+                                            <td>xiajianlin</td>
+                                            <td>1</td>
+                                            <td class="center"><a href="" class="edit">Edit</a> &nbsp; <a href="" class="delete">Delete</a> &nbsp; <a href="" class="delete">Pods</a></td>
+                                        </tr>
+                                        <tr class="odd gradeX">
+                                            <td>linyi</td>
+                                            <td>2</td>
+                                            <td class="center"><a href="" class="edit">Edit</a> &nbsp; <a href="" class="delete">Delete</a> &nbsp; <a href="" class="delete">Pods</a></td>
+                                        </tr> -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- /.panel-body -->
+
+                        <div class="modal fade" id="newUser" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                        <h4 class="modal-title" id="myModalLabel">Create User</h4>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="table-responsive">
+                                                <table id="myTable" class="table table-bordered table-striped">
+                                                    <tbody>
+                                                        <tr>
+                                                            <th>User Name</th>
+                                                            <th colspan="2">
+                                                                <input id="newUserName" class="form-control">
+                                                            </th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Password</th>
+                                                            <th colspan="2">
+                                                                <input id="newUserPsw" class="form-control" type="password" value="">
+                                                            </th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Password Confirm</th>
+                                                            <th colspan="2">
+                                                                <input id="newUserPswEnsure" class="form-control" type="password" value="">
+                                                            </th>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-success" onclick="createUser()" >Create</button>
+                                        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                                <!-- /.modal-content -->
+                            </div>
+                            <!-- /.modal-dialog -->
+                        </div>
+
+                        <div class="modal fade" id="updateUser" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                        <h4 class="modal-title" id="myModalLabel">Update User</h4>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="table-responsive">
+                                                <table id="myTable" class="table table-bordered table-striped">
+                                                    <tbody>
+                                                        <tr>
+                                                            <th>User Name</th>
+                                                            <th colspan="2">
+                                                                <input id="userName" class="form-control" disabled>
+                                                            </th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>New Password</th>
+                                                            <th colspan="2">
+                                                                <input id="newPsw" class="form-control" type="password" value="">
+                                                            </th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Password Confirm</th>
+                                                            <th colspan="2">
+                                                                <input id="newPswEnsure" class="form-control" type="password" value="">
+                                                            </th>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-primary" onclick="updateUser()" >Update</button>
+                                        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                                <!-- /.modal-content -->
+                            </div>
+                            <!-- /.modal-dialog -->
+                        </div>
+
+                        <div class="modal fade" id="deleteUser" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                        <h4 class="modal-title" id="myModalLabel">Delete Confirm</h4>
+                                    </div>
+                                    <div class="modal-body" align="center">
+                                        <div id="warningwords">
+
+                                        </div>
+                                        <p id="userTobeDeleted" style="display:none;"></p>
+                                        <button type="button" class="btn btn-danger" onclick="deleteUser()" >Delete it</button>
+                                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                                    </div>
+                                    <div class="modal-footer">
+                                    </div>
+                                </div>
+                                <!-- /.modal-content -->
+                            </div>
+                            <!-- /.modal-dialog -->
+                        </div>
+
+                         <div class="modal fade" id="showUserPods" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                        <h4 class="modal-title" id="myModalLabel">Modal title</h4>
+                                    </div>
+
+                                    <div class="modal-body">
+                                        <div class="panel-body">
+                                            <div class="panel-group" id="accordion">
+                                                <!-- <div class="panel panel-default">
+                                                    <div class="panel-heading">
+                                                        <h4 class="panel-title">
+                                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseOne">Collapsible Group Item #1</a>
+                                                        </h4>
+                                                    </div>
+                                                    <div id="collapseOne" class="panel-collapse collapse in">
+                                                        <div class="panel-body">
+                                                            Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="panel panel-default">
+                                                    <div class="panel-heading">
+                                                        <h4 class="panel-title">
+                                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseTwo">Collapsible Group Item #2</a>
+                                                        </h4>
+                                                    </div>
+                                                    <div id="collapseTwo" class="panel-collapse collapse">
+                                                        <div class="panel-body">
+                                                            Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="panel panel-default">
+                                                    <div class="panel-heading">
+                                                        <h4 class="panel-title">
+                                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseThree">Collapsible Group Item #3</a>
+                                                        </h4>
+                                                    </div>
+                                                    <div id="collapseThree" class="panel-collapse collapse">
+                                                        <div class="panel-body">
+                                                            Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                                                        </div>
+                                                    </div>
+                                                </div> -->
+                                            </div>
+                                        </div>
+                                    <div class="modal-footer"></div>
+                                </div>
+                                <!-- /.modal-content -->
+                            </div>
+                            <!-- /.modal-dialog -->
+                        </div>
+                        <!-- /.modal-dialog -->
+                    </div>
+                    <!-- /.panel -->
+                </div>
+                <!-- /.col-lg-12 -->
+            </div>
+            <!-- /.row -->
+        </div>
+        <!-- /#page-wrapper -->
+    </div>
+    <!-- /#wrapper -->
+
+    <!-- Bootstrap Core JavaScript -->
+    <script src="../bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+
+    <!-- Metis Menu Plugin JavaScript -->
+    <script src="../bower_components/metisMenu/dist/metisMenu.min.js"></script>
+
+    <!-- DataTables JavaScript -->
+    <script src="../bower_components/datatables/media/js/jquery.dataTables.min.js"></script>
+    <script src="../bower_components/datatables-plugins/integration/bootstrap/3/dataTables.bootstrap.min.js"></script>
+
+    <!-- Custom Theme JavaScript -->
+    <script src="../dist/js/sb-admin-2.js"></script>
+
+    <!-- Page-Level Demo Scripts - Tables - Use for reference -->
+    <script>
+    $(document).ready(function() {
+        $('#dataTables-example').DataTable({
+                responsive: true
+        });
+    });
+    </script>
+
+</body>
+
+</html>

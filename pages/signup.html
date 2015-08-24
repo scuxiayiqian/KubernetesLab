@@ -9,7 +9,7 @@
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Kubernetes Lab - Sign in</title>
+    <title>Kubernetes Lab - Sign up</title>
 
     <!-- Bootstrap Core CSS -->
     <link href="../bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -23,47 +23,39 @@
     <!-- Custom Fonts -->
     <link href="../bower_components/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css">
 
-    <!-- 自定义cookie函数 -->
-    <script src="../dist/js/cookie.js"></script>
-
     <!-- jQuery -->
     <script src="../bower_components/jquery/dist/jquery.min.js"></script>
     <script src="../bower_components/jquery/dist/jquery.cookie.js"></script>
 
     <script type="text/javascript">
-        function verifyUser() {
-            var userName = $("#username").val();
-            var passWord = $("#psw").val();
 
-            // if username equals to null
-            if (userName == "") {
-                alert("Incorrect username or password.");
-            }
-            else {
-                $.ajax({
-                    dataType: "json",
-                    url: "http://localhost:80/yiqian/users/" + userName,
-                    // url: "http://localhost:80/k8s/api/v1beta1/pods",
-                    contentType: "application/json",
-                    type: "GET",
-                    xhrFields: {
-                        withCredentials: true
-                    },
-                    success: function (result) {
-                        if (result.password == passWord) {
-                            // $.cookie("id",userName);
-                            setCookie("id", userName, 30);
-                            window.location.href = "index.html";
-                        } else if (result.password != passWord) {
-                            alert("Incorrect username or password.");
-                        }
-                    }, 
-                    error: function (XMLHttpRequest, textStatus, errorThrown) {
-                        alert("Incorrect username or password.");
-                    }
-                });
-            }            
+    function registerUser() {
+        var userName = $("#username").val();
+        var passWord = $("#psw").val();
+        var passWordConfirm = $("#pswconfirm").val();
+        var userInfo = "";
+
+        if (passWord != passWordConfirm) {
+            alert("Password not match!");
         }
+        else {
+            userInfo = "{\"name\": \"" + userName + "\",\"password\": \"" + passWord + "\"}";
+            $.ajax({
+                type: "POST",
+                url:"http://localhost:80/yiqian/users/",
+                contentType: "application/json",
+                data: userInfo,  
+                dataType: "json", 
+                success: function (result) {
+                    window.location.href = "login.html"
+                }, 
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    alert("Username existed!");
+                }
+            });
+        }   
+    }
+
     </script>
 
     <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
@@ -82,16 +74,19 @@
             <div class="col-md-4 col-md-offset-4">
                 <div class="login-panel panel panel-default">
                     <div class="panel-heading">
-                        <h3 class="panel-title">Sign in</h3>
+                        <h3 class="panel-title">Sign up</h3>
                     </div>
                     <div class="panel-body">                        
                         <form role="form">
                             <fieldset>
                                 <div class="form-group">
-                                    <input class="form-control" placeholder="Username" id="username" type="text" autofocus>
+                                    <input class="form-control" placeholder="Pick a username" id="username" type="text" autofocus>
                                 </div>
                                 <div class="form-group">
-                                    <input class="form-control" placeholder="Password" id="psw" type="password">
+                                    <input class="form-control" placeholder="Create a password" id="psw" type="password">
+                                </div>
+                                <div class="form-group">
+                                    <input class="form-control" placeholder="Confirm your password" id="pswconfirm" type="password">
                                 </div>
                                 <div class="checkbox">
                                     <label>
@@ -99,7 +94,7 @@
                                     </label>
                                 </div>
                                 <!-- Change this to a button or input when using this as a form -->
-                                <a onclick="verifyUser()" class="btn btn-success btn-block">Sign in</a>
+                                <a onclick="registerUser()" class="btn btn-success btn-block">Sign up for Kubernetes Lab</a>
                             </fieldset>
                         </form>
                     </div>

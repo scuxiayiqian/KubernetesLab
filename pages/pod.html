@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>Kubernetes Lab - Pod Manager</title>
+
+    <!-- Bootstrap Core CSS -->
+    <link href="../bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- MetisMenu CSS -->
+    <link href="../bower_components/metisMenu/dist/metisMenu.min.css" rel="stylesheet">
+
+    <!-- DataTables CSS -->
+    <link href="../bower_components/datatables-plugins/integration/bootstrap/3/dataTables.bootstrap.css" rel="stylesheet">
+
+    <!-- DataTables Responsive CSS -->
+    <link href="../bower_components/datatables-responsive/css/dataTables.responsive.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="../dist/css/sb-admin-2.css" rel="stylesheet">
+
+    <!-- Custom Fonts -->
+    <link href="../bower_components/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+    <!-- 自定义cookie函数 -->
+    <script src="../dist/js/cookie.js"></script>
+
+    <!-- Import jQuery -->
+    <script src="../bower_components/jquery/dist/jquery.min.js"></script>
+    <script src="../bower_components/jquery/dist/jquery.cookie.js"></script>
+
+    <script type="text/javascript">
+    //Get the login user
+    $(document).ready(function() {
+        var id = $.cookie("id");
+        if (id == null) {
+            window.location.href = "login-first.html";
+        }
+        if (id == "Admin") {
+            showUserPage.style.display = "";
+        }
+        var label = document.getElementById('usernameLabel');
+        label.innerHTML = "<a href=\"index.html\">" + id + "</a>";
+    });
+    </script>
+
+    <script type="text/javascript">
+        var newPodId;
+
+        function sleep(numberMillis) { 
+            var now = new Date(); 
+            var exitTime = now.getTime() + numberMillis; 
+            while (true) { 
+                now = new Date(); 
+                if (now.getTime() > exitTime) 
+                return; 
+            } 
+        }
+
+        function statusClicked(toDeleteId) {
+            document.getElementById('toDeletePodName').innerHTML = toDeleteId;
+            document.getElementById('podTobeDeleted').innerHTML = toDeleteId;
+            $('#toDeletePod').modal('show');
+        }
+
+        function deletePodClicked() {
+            var podid = document.getElementById('podTobeDeleted').innerHTML;
+            var rcindex = -1;
+
+            $.ajax({
+                type: "GET",
+                url: "http://localhost:80/k8s/api/v1beta1/replicationControllers",
+                contentType: "application/json",
+                dataType: "json",  
+                xhrFields: {
+                    withCredentials: true
+                },              
+                success: function(result){
+                    for (var i = 0; i < result.items.length; i++) {
+                        if (podid.indexOf(result.items[i].id) != "-1") {
+                            rcindex = i;
+                        }
+                    }
+
+                    if (rcindex == -1) {
+                        // console.log(podid);
+                        deleteUserNPodRelate(podid);
+                    } 
+                    else {
+                        // console.log(result.items[rcindex].id + "..." + podid);
+                        deleteRC(result.items[rcindex].id, podid);
+                    }
+                    // console.log(rcindex);
+                },
+                error: function(){ }
+            });
+        }
+
+        function deleteUserNPodRelate(podid) {
+            var name = $.cookie("id");
+            var info = "{\"id\": \"" + podid + "\"}";
+
+            $.ajax({
+                url: "http://localhost:80/yiqian/containers/" + name,
+                dataType: "json",
+                contentType: "application/json",
+                data: info,
+                type: "DELETE",
+                success: function (result) {
+                    $('#toDeletePod').modal('hide');
+                    window.location.reload();
+                    deleteSinglePod(podid);
+                },
+                //调用出错执行的函数
+                error: function(){
+                    alert("delete failed");
+                }   
+            });
+        }
+
+        function deleteSinglePod(podid) {
+            $.ajax({
+                url: "http://localhost:80/k8s/api/v1beta1/pods/" + podid,
+                dataType: "json",
+                contentType: "application/json",
+                type: "DELETE",
+                success: function (result) {
+                    console.log("delete pod " + podid + " done !");
+                },
+                //调用出错执行的函数
+                error: function(){
+                    alert("delete single pod failed");
+                }   
+            });
+        }
+
+        function deleteRC(rcID, podid) {
+            $.ajax({
+                url: "http://localhost:80/k8s/api/v1beta1/replicationControllers/" + rcID,
+                dataType: "json",
+                contentType: "application/json",
+                type: "DELETE",
+                success: function (result) {
+                    deleteUserNPodRelate(podid);
+                },
+                //调用出错执行的函数
+                error: function(){
+                    alert("delete RC " + rcID +  " failed!!");
+                }   
+            });
+        }
+
+        function isExist(val, arr) {
+            for (var i = 0; i < arr.length; i++) {
+                if (val == arr[i]) 
+                    return true;
+            }
+            return false;
+        }
+
+        var rowCount = 4;
+        var containerNumber = 1;
+        function insRow() {
+            containerNumber++;
+            var x=document.getElementById('myTable').insertRow(rowCount);
+            var y=x.insertCell(0);
+            var z=x.insertCell(1);
+            var t=x.insertCell(2);
+
+            var imagename = "containerImage" + containerNumber.toString();
+            var containerport = "containerPort" + containerNumber.toString();
+            
+            y.innerHTML="<button onclick=\"insRow()\" type=\"button\" class=\"btn btn-social-icon btn-dropbox\"><i class=\"fa fa-plus\"></i></button>\n<button onclick=\"delRow()\" type=\"button\" class=\"btn btn-social-icon btn-dropbox\"><i class=\"fa fa-minus\"></i></button>";
+            z.innerHTML="<input id=\"" + imagename + "\" class=\"form-control\" placeholder=\"ImageName\">";
+            t.innerHTML="<input id=\"" + containerport + "\" class=\"form-control\" placeholder=\"Port of the container\">";
+            rowCount++;
+        }
+
+        function delRow() {
+            rowCount--;
+            containerNumber--;
+            var x=document.getElementById('myTable').deleteRow(rowCount);
+        }
+
+        var onlineUserContainersStr = "";
+        function searchPodsInSlaveReady(e) {
+
+            //先把当前登陆用户的所有pod id记录下来
+            var onlineUserName = $.cookie("id");
+            var onlineUserContainers = new Array();
+            
+            $.ajax({
+                type: "GET",
+                url: "http://localhost:80/yiqian/containers/" + onlineUserName,
+                contentType: "application/json",
+                dataType: "json",  
+                xhrFields: {
+                    withCredentials: true
+                },              
+                success: function(result){
+                    for (var i = 0; i < result.length; i++) {
+                        onlineUserContainers.push(result[i].id);
+                    }
+                    onlineUserContainersStr = onlineUserContainers.toString();
+                    searchPodsInSlave(e);
+                },
+                error: function(){ }
+            });            
+        }      
+
+        function searchPodsInSlave(e) {
+            var minionIP = e.innerHTML;  //192.168.1.151
+            var panelID = minionIP.replace(/\./g, "-"); //192-168-1-151
+            var item = null;
+            var podsHTML = "";
+            var tmpId = "";
+
+            var id, status, resourceVersion, creationTimestamp, podIP, labelsApp, labelsName, labelsUses, namespace, generateName, containerName, containerImage = "";
+
+            for ( var i = 0; i < allPods.items.length; i++ ) {
+                item = allPods.items[i];
+                tmpId = item.id;
+                // console.log(tmpId);
+
+                if ( (item.currentState.hostIP == minionIP) && ((onlineUserContainersStr.indexOf(tmpId)) != "-1") ) {
+                    id = item.id;
+                    status = item.currentState.status;
+                    resourceVersion = item.resourceVersion;
+                    creationTimestamp = item.creationTimestamp;
+                    podIP = item.currentState.podIP;
+                    labelsApp = item.labels.app;
+                    labelsName = item.labels.name;
+                    labelsUses = item.labels.uses;
+                    namespace = item.namespace;
+                    generateName = item.generateName;
+                    podsHTML += "<div class=\"table-responsive\"><table class=\"table table-bordered table-striped\"><tbody><tr><th>id</th><td>" + id + "</td><th colspan=\"2\">status</th><td><a href=\"#\" onclick=\"statusClicked('" + id + "')\";>" + status + "</a></td></tr><tr><th>resourceVersion</th><td>" + resourceVersion + "</td><th colspan=\"2\">creationTimestamp</th><td>" + creationTimestamp + "</td></tr><tr><th>podIP</th><td>" + podIP + "</td><th rowspan=\"3\">labels</th><th>app</th><td colspan=\"2\">" + labelsApp + "</td></tr><tr><th>namespace</th><td>" + namespace + "</td><th>name</th><td colspan=\"2\">" + labelsName + "</td></tr><tr><th>generateName</th><td>" + generateName + "</td><th>uses</th><td colspan=\"2\">" + labelsUses + "</td></tr>";
+
+                    // add containers info
+                    for ( var j = 0; j < item.desiredState.manifest.containers.length; j++ ) {
+                        var rowspan = item.desiredState.manifest.containers.length * 2;
+                        containerName = item.desiredState.manifest.containers[j].name;
+                        containerImage = item.desiredState.manifest.containers[j].image;
+                        if (j == 0) {
+                            podsHTML += "<tr><th rowspan=\"" + rowspan + "\">containers</th><th rowspan=\"2\">" + (j + 1) + "</th><th>name</th><td colspan=\"3\">" + containerName + "</td></tr><tr><th>image</th><td colspan=\"3\">" + containerImage + "</td></tr>";
+                        } else if ( j > 0) {
+                            podsHTML += "<tr><th rowspan=\"2\">" + (j + 1) + "</th><th>name</th><td colspan=\"3\">" + containerName + "</td></tr><tr><th>image</th><td colspan=\"3\">" + containerImage + "</td></tr>";
+                        }
+                    }
+                    podsHTML += "</tbody></table></div>";
+                }
+            }
+            $("#" + panelID).html(podsHTML);
+        }
+        
+        jQuery(document).ready(function($) {
+            var slaveIPArr = new Array();
+            $.ajax({
+                dataType: "json",
+                url: "http://localhost:80/k8s/api/v1beta1/pods",
+                // url: "http://202.120.40.177:18081/kubernetes/api/v1beta1/pods",
+                contentType: "application/json",
+                type: "GET",
+                xhrFields: {
+                    withCredentials: true
+                },
+                success: function (result) {
+                    allPods = result;
+                    slaveIPArr.push(result.items[0].currentState.hostIP);
+                    for (var i = 1; i < result.items.length; i++) {
+                        if (!isExist(result.items[i].currentState.hostIP, slaveIPArr))
+                            slaveIPArr.push(result.items[i].currentState.hostIP);
+                    }
+                    slaveIPArr.sort(); //对数组进行排序
+
+                    var slavePanels = "";
+                    for (var i = 0; i < slaveIPArr.length; i++) {
+                        var panelID = slaveIPArr[i];
+                        var panelCount = i;
+                        var tagID = panelID.replace(/\./g, "-");
+                        // console.log(tagID);
+                        slavePanels += "<div class=\"panel panel-default\"><div class=\"panel-heading\"><h4 class=\"panel-title\"><a onclick=\"searchPodsInSlaveReady(this)\" data-toggle=\"collapse\" data-parent=\"#accordion\" href=\"#" + panelCount + "\">" + panelID + "</a></h4></div><div id=\"" + panelCount + "\" class=\"panel-collapse collapse\"><div class=\"panel-body\" id=\"" + tagID + "\"></div></div></div>";
+                    }
+                    $("#accordion").html(slavePanels);
+                }
+            });
+        });
+
+        function searchJustCreatedPods(rcId) {
+            var podsArr = new Array();
+            var tmpid = "";
+            $.ajax({
+                type: "GET",
+                url: "http://localhost:80/k8s/api/v1beta1/pods",
+                contentType: "application/json",
+                dataType: "json",  
+                xhrFields: {
+                    withCredentials: true
+                },              
+                success: function(result) {
+                    for (var i = 0; i < result.items.length; i++) {
+                        tmpid = result.items[i].id;
+                        if (tmpid.indexOf(rcId) != "-1") {
+                            podsArr.push(tmpid);
+                        }
+                    }
+                    relateOnlineUserNPods(podsArr);
+                },
+                error: function(){ }
+            });      
+        }
+
+        function relateOnlineUserNPods(podsArr) {
+            var userid = $.cookie("id");
+            for(var i = 0; i < podsArr.length; i++) {
+
+                var str = "{\"id\": \"" + podsArr[i] + "\"}";
+
+                $.ajax({
+                    type: "POST",
+                    url: "http://localhost:80/yiqian/containers/" + userid,
+                    contentType: "application/json",
+                    data: str,
+                    dataType: "json",                
+                    success: function(data){},
+                    error: function(){
+                        alert("fail");
+                    }         
+                });
+            }
+            window.location.reload();
+        }
+
+        function postPod() {
+            var imageName1 = $("#containerImage1").val();
+            var imagePort1 = $("#containerPort1").val();
+            
+            //随机生成一个5位的id号
+            var randomStr = Math.random().toString(36).substr(2, 5);
+
+            var podName = $("#podName").val();
+            var podNumber = $("#podNumber").val();  
+            var rcId = (podName + "-" + randomStr).replace(/\//g, "-").replace(/\:/g, "-") + "-controller";
+            var jsonName = podName + "-" + randomStr;
+
+            var podJson = {
+              "id": rcId,
+              "kind": "ReplicationController",
+              "apiVersion": "v1beta1",
+              "desiredState": {
+                "replicas": parseInt(podNumber),
+                "replicaSelector": {"name": jsonName},
+                "podTemplate": {
+                  "desiredState": {
+                     "manifest": {
+                       "version": "v1beta1",
+                       "id": jsonName,
+                       "containers": [{
+                         "name": jsonName,
+                         "image": imageName1,
+                         "ports": [{"containerPort": parseInt(imagePort1)}]
+                       }]
+                     }
+                  },
+                  "labels": {
+                    "name": jsonName
+                  }
+                }
+              },
+              "labels": {"name": jsonName}
+            };
+
+            var podStr = JSON.stringify(podJson);
+            console.log(podStr);
+
+            $.ajax({
+                type: "POST",
+                url: "http://localhost:80/k8s/api/v1beta1/replicationControllers",
+                contentType: "application/json",
+                data: podStr,  
+                dataType: "json",                
+                success: function(data){
+                    console.log(data);
+                },
+                //调用执行后调用的函数
+                complete: function(XMLHttpRequest, textStatus){
+                    // alert(XMLHttpRequest.responseText);
+
+                    // 停止2s
+                    sleep(2000);
+                    // 建立pod与user的关联
+                    searchJustCreatedPods(rcId);
+                    // alert(textStatus);
+                    //HideLoading();
+                },
+                //调用出错执行的函数
+                error: function(){
+                    alert("fail");
+                }         
+            });     
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="wrapper">
+
+        <!-- Navigation -->
+        <nav class="navbar navbar-default navbar-static-top" role="navigation" style="margin-bottom: 0">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="index.html">Kubernetes Lab</a>
+            </div>
+            <!-- /.navbar-header -->
+
+            <ul class="nav navbar-top-links navbar-right">
+                <li id = "usernameLabel"></li>
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-envelope fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-messages">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <strong>John Smith</strong>
+                                    <span class="pull-right text-muted">
+                                        <em>Yesterday</em>
+                                    </span>
+                                </div>
+                                <div>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eleifend...</div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>Read All Messages</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-messages -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-tasks fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-tasks">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 1</strong>
+                                        <span class="pull-right text-muted">40% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" style="width: 40%">
+                                            <span class="sr-only">40% Complete (success)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 2</strong>
+                                        <span class="pull-right text-muted">20% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-info" role="progressbar" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100" style="width: 20%">
+                                            <span class="sr-only">20% Complete</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 3</strong>
+                                        <span class="pull-right text-muted">60% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 60%">
+                                            <span class="sr-only">60% Complete (warning)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <p>
+                                        <strong>Task 4</strong>
+                                        <span class="pull-right text-muted">80% Complete</span>
+                                    </p>
+                                    <div class="progress progress-striped active">
+                                        <div class="progress-bar progress-bar-danger" role="progressbar" aria-valuenow="80" aria-valuemin="0" aria-valuemax="100" style="width: 80%">
+                                            <span class="sr-only">80% Complete (danger)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>See All Tasks</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-tasks -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-bell fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-alerts">
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-comment fa-fw"></i> New Comment
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-twitter fa-fw"></i> 3 New Followers
+                                    <span class="pull-right text-muted small">12 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-envelope fa-fw"></i> Message Sent
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-tasks fa-fw"></i> New Task
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a href="#">
+                                <div>
+                                    <i class="fa fa-upload fa-fw"></i> Server Rebooted
+                                    <span class="pull-right text-muted small">4 minutes ago</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li>
+                            <a class="text-center" href="#">
+                                <strong>See All Alerts</strong>
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-alerts -->
+                </li>
+                <!-- /.dropdown -->
+                <li class="dropdown">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        <i class="fa fa-user fa-fw"></i>  <i class="fa fa-caret-down"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-user">
+                        <li><a href="#"><i class="fa fa-user fa-fw"></i> User Profile</a>
+                        </li>
+                        <li><a href="#"><i class="fa fa-gear fa-fw"></i> Settings</a>
+                        </li>
+                        <li class="divider"></li>
+                        <li><a href="#" onclick=logOut();><i class="fa fa-sign-out fa-fw"></i> Logout</a>
+                        </li>
+                    </ul>
+                    <!-- /.dropdown-user -->
+                </li>
+                <!-- /.dropdown -->
+            </ul>
+            <!-- /.navbar-top-links -->
+
+            <div class="navbar-default sidebar" role="navigation">
+                <div class="sidebar-nav navbar-collapse">
+                    <ul class="nav" id="side-menu">
+                        <li class="sidebar-search">
+                            <div class="input-group custom-search-form">
+                                <input type="text" class="form-control" placeholder="Search...">
+                                <span class="input-group-btn">
+                                <button class="btn btn-default" type="button">
+                                    <i class="fa fa-search"></i>
+                                </button>
+                            </span>
+                            </div>
+                            <!-- /input-group -->
+                        </li>
+                        <li>
+                            <a href="index.html"><i class="fa fa-dashboard fa-fw"></i> Dashboard</a>
+                        </li>
+                        
+                        <!--author: scuxiayiqian-->
+                        <li>
+                            <a href="vm.html"><i class="fa fa-edit fa-fw"></i> VM Manager</a>
+                        </li>
+                        <li>
+                            <a href="pod.html"><i class="fa fa-wrench fa-fw"></i> Pod Manager</a>
+                        </li>
+                        <li style="display:none" id="showUserPage">
+                            <a href="user.html"><i class="fa fa-sitemap fa-fw"></i> User Manager</a>
+                        </li>
+                        <!--author: scuxiayiqian-->
+                    </ul>
+                </div>
+                <!-- /.sidebar-collapse -->
+            </div>
+            <!-- /.navbar-static-side -->
+        </nav>
+
+        <div id="page-wrapper">
+            <div class="row">
+                <div class="col-lg-12">
+                    <h1 class="page-header">Pod Manager</h1>
+                </div>
+                <!-- /.col-lg-12 -->
+            </div>
+
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="panel panel-default">
+                        <div class="panel-heading tooltip-demo">
+                            Master Host: 202.120.40.178 | Server IP: 202.120.40.178
+                            <button type="button" class="padding-right15 pull-right btn btn-success" data-toggle="modal" data-target="#myModal">Create</button>
+                        </div>
+                        <div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                        <h4 class="modal-title" id="myModalLabel">Create a New Pod</h4>
+                                    </div>
+                                    <div class="modal-body">
+                                        <!-- <form role="form"> -->
+                                            <div class="table-responsive">
+                                                <table id="myTable" class="table table-bordered table-striped">
+                                                    <tbody>
+                                                        <tr>
+                                                            <th>Pod Name</th>
+                                                            <th colspan="2">
+                                                                <input id="podName" class="form-control" placeholder="Name of the pod">
+                                                            </th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Number</th>
+                                                            <th colspan="2">
+                                                                <input id="podNumber" class="form-control" placeholder="Number of the pod">
+                                                            </th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Container</th>
+                                                            <th>Image</th>
+                                                            <th>Container Port</th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>
+                                                                <button onclick="insRow()" type="button" class="btn btn-social-icon btn-dropbox">
+                                                                    <i class="fa fa-plus"></i>
+                                                                </button>
+                                                            </th>
+                                                            <td>
+                                                                <input id="containerImage1" class="form-control" placeholder="Image name">
+                                                            </td>
+                                                            <td>
+                                                                <input id="containerPort1" class="form-control" placeholder="Port of the container">
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div align="right">
+                                                <button type="reset" class="btn btn-default">Reset</button>
+                                                <button type="submit" class="btn btn-success" onclick=postPod()>Create</button>
+                                            </div>
+                                        <!-- </form> -->
+                                    </div>
+                                    <!-- <div class="modal-footer">
+                                        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                                        <button type="submit" class="btn btn-success">Create</button>
+                                    </div> -->
+                                </div>
+                                <!-- /.modal-content -->
+                            </div>
+                            <!-- /.modal-dialog -->
+                        </div>
+
+                        <div class="modal fade" id="toDeletePod" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                        <h4 class="modal-title" id="toDeletePodName"></h4>
+                                    </div>
+                                    <div class="modal-body" align="center">
+                                        <p id="podTobeDeleted" style="display:none;"></p>
+                                        <button type="button" class="btn btn-danger" onclick="deletePodClicked()">Stop and delete it</button>
+                                    </div>
+                                    <div class="modal-footer">
+<!--                                         <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                                        <button type="submit" class="btn btn-success">Create</button> -->
+                                    </div>
+                                </div>
+                                <!-- /.modal-content -->
+                            </div>
+                            <!-- /.modal-dialog -->
+                        </div>
+                        <!-- /.modal -->
+                        <!-- .panel-heading -->
+                        <div class="panel-body">
+                            <div class="panel-group" id="accordion">
+                                <!-- ## -->
+                                <!-- <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="panel-title">
+                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseOne" id="slave1"></a>
+                                        </h4>
+                                    </div>
+                                    <div id="collapseOne" class="panel-collapse collapse">
+                                        <div class="panel-body">
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered table-striped">
+                                                    <tbody>
+                                                        <tr>
+                                                            <th>id</th>
+                                                            <td>frontend-controller-0133o</td>
+                                                            <th colspan="2">status</th>
+                                                            <td class="text-success">Running</td> 
+                                                        </tr>
+                                                        <tr>
+                                                            <th>resourceVersion</th>
+                                                            <td>159481</td>
+                                                            <th colspan="2">creationTimestamp</th>
+                                                            <td>2015-03-23T10:44:34+08:00</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>podIP</th>
+                                                            <td>10.0.28.3</td>
+                                                            <th rowspan="3">labels</th>
+                                                            <th>app</th>
+                                                            <td colspan="2">frontend</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>namespace</th>
+                                                            <td>default</td>
+                                                            <th>name</th>
+                                                            <td colspan="2">frontend</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>generateName</th>
+                                                            <td>frontend-controller-</td>
+                                                            <th>uses</th>
+                                                            <td colspan="2">redis-slave-or-redis-master</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th rowspan="6">containers</th>
+                                                            <th rowspan="2">1</th>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th rowspan="2">2</th>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th rowspan="2">3</th>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>labels</th>
+                                                            <td colspan="3">10.0.28.3</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="panel-title">
+                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseTwo">slave2</a>
+                                        </h4>
+                                    </div>
+                                    <div id="collapseTwo" class="panel-collapse collapse">
+                                        <div class="panel-body" id="slave2">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="panel-title">
+                                            <a data-toggle="collapse" data-parent="#accordion" href="#collapseThree">slave3</a>
+                                        </h4>
+                                    </div>
+                                    <div id="collapseThree" class="panel-collapse collapse">
+                                        <div class="panel-body" id="slave3">
+                                        </div>
+                                    </div>
+                                </div> -->
+                            </div>
+                        </div>
+                        <!-- .panel-body -->
+                    </div>
+                    <!-- /.panel -->
+                </div>
+                <!-- /.col-lg-12 -->
+            </div>
+
+            
+        </div>
+        <!-- /#page-wrapper -->
+
+    </div>
+    <!-- /#wrapper -->
+
+    <!-- Bootstrap Core JavaScript -->
+    <script src="../bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+
+    <!-- Metis Menu Plugin JavaScript -->
+    <script src="../bower_components/metisMenu/dist/metisMenu.min.js"></script>
+
+    <!-- DataTables JavaScript -->
+    <script src="../bower_components/datatables/media/js/jquery.dataTables.min.js"></script>
+    <script src="../bower_components/datatables-plugins/integration/bootstrap/3/dataTables.bootstrap.min.js"></script>
+
+    <!-- Custom Theme JavaScript -->
+    <script src="../dist/js/sb-admin-2.js"></script>
+    <!-- <script src="../dist/js/json.js"></script>
+    <script src="../dist/js/json2.js"></script>
+    <script src="../dist/js/cycle.js"></script>
+    <script src="../dist/js/json_parse.js"></script>
+    <script src="../dist/js/json_parse_state.js"></script>-->
+
+    <!-- Page-Level Demo Scripts - Tables - Use for reference -->
+    <script>
+    $(document).ready(function() {
+        $('#dataTables-example').DataTable({
+                responsive: true
+        });
+    });
+    </script>
+
+    <script>
+    // tooltip demo
+    $('.tooltip-demo').tooltip({
+        selector: "[data-toggle=tooltip]",
+        container: "body"
+    })
+
+    // popover demo
+    $("[data-toggle=popover]")
+        .popover()
+    </script>
+
+</body>
+
+</html>
